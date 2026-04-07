@@ -14,7 +14,10 @@ find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
 
-add_executable(stereo_concat src/stereo_concat.cpp)
+add_executable(stereo_concat 
+ src/main.cpp
+ src/stereo_concat_node.cpp
+)
 target_include_directories(stereo_concat PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
