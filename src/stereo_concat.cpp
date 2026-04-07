@@ -24,6 +24,9 @@
 #include "cv_bridge/cv_bridge.hpp"
 #include <opencv2/opencv.hpp>
 
+#include <chrono>
+#include <string>
+
 class StereoSubscriber : public rclcpp::Node
 {
 public:
@@ -38,13 +41,15 @@ public:
     RCLCPP_INFO(this->get_logger(), "Left image topic: %s", left_image_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Right image topic: %s", right_image_topic.c_str());
 
-    auto topic_callback =
-        [this](sensor_msgs::msg::CompressedImage::SharedPtr msg) -> void
-    {
-      RCLCPP_INFO(
-          this->get_logger(), "Received image! Format: %s | Size: %zu bytes",
-          msg->format.c_str(), msg->data.size());
-    };
+    publisher_ = this->create_publisher<sensor_msgs::msg::Image>("stereo/concatenated", 10);
+
+    // auto topic_callback =
+    //     [this](sensor_msgs::msg::CompressedImage::SharedPtr msg) -> void
+    // {
+    //   RCLCPP_INFO(
+    //       this->get_logger(), "Received image! Format: %s | Size: %zu bytes",
+    //       msg->format.c_str(), msg->data.size());
+    // };
 
     // leftSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(left_image_topic, rclcpp::SensorDataQoS(), topic_callback);
     // rightSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(right_image_topic, rclcpp::SensorDataQoS(), topic_callback);
@@ -61,8 +66,11 @@ public:
                 "Synchronized subscriber started for: %s and %s",
                 left_image_topic.c_str(), right_image_topic.c_str());
 
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>> sub1_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>>(this, left_image_topic);
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>> sub2_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>>(this, right_image_topic);
+    timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&StereoSubscriber::timer_callback, this));
+
+    RCLCPP_INFO(this->get_logger(), "Node started. Publishing to /stereo/concatenated at 50Hz");
+
+    //publisher_ = this->create_publisher<sensor_msgs::msg::Image>("stereo/concatenated", 10);
   }
 
 private:
@@ -80,7 +88,6 @@ private:
   {
     try
     {
-      cv::Mat concatenated_img;
       cv::Mat left_img = cv_bridge::toCvCopy(left_msg, "bgr8")->image;
       cv::Mat right_img = cv_bridge::toCvCopy(right_msg, "bgr8")->image;
       if (left_img.rows == right_img.rows)
@@ -88,9 +95,9 @@ private:
         cv::hconcat(left_img, right_img, concatenated_img);
 
         // 3. Display the result (for debugging)
-        cv::imshow("Stereo Concat", concatenated_img);
-        cv::waitKey(1);
-        RCLCPP_INFO(this->get_logger(), "Successfully processed and displayed stereo pair.");
+        //cv::imshow("Stereo Concat", concatenated_img);
+        //cv::waitKey(1);
+        RCLCPP_INFO(this->get_logger(), "Successfully processed stereo image.");
       }
       else
       {
@@ -102,8 +109,25 @@ private:
       RCLCPP_ERROR(this->get_logger(), "Could not convert image: %s", e.what());
     }
   }
+
+  void timer_callback()
+  {
+    if (!this->concatenated_img.empty())
+    {
+      RCLCPP_INFO(this->get_logger(), "Publishing concatenated image...");
+      auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", this->concatenated_img).toImageMsg();
+      msg->header.stamp = this->now();
+      publisher_->publish(*msg);
+    }
+    else
+    {
+      RCLCPP_WARN(this->get_logger(), "No concatenated image to publish yet.");
+    }
+  }
   message_filters::Subscriber<sensor_msgs::msg::CompressedImage> left_sub_;
   message_filters::Subscriber<sensor_msgs::msg::CompressedImage> right_sub_;
+  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
 
   std::shared_ptr<message_filters::TimeSynchronizer<
       sensor_msgs::msg::CompressedImage,
@@ -112,6 +136,7 @@ private:
 
   // rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr leftSubscription_;
   // rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr rightSubscription_;
+  cv::Mat concatenated_img;
 };
 
 int main(int argc, char *argv[])
