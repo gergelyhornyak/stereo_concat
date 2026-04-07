@@ -36,10 +36,17 @@ install(TARGETS
   stereo_concat
   DESTINATION lib/${PROJECT_NAME}
 )
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
+
 install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(FILES
+  onboarding.mcap
   DESTINATION share/${PROJECT_NAME}
 )
 
