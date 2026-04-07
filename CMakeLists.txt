@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
+find_package(OpenCV REQUIRED)
 
 add_executable(stereo_concat src/stereo_concat.cpp)
 target_include_directories(stereo_concat PUBLIC
@@ -19,14 +20,17 @@ target_include_directories(stereo_concat PUBLIC
   $<INSTALL_INTERFACE:include>)
 
 target_compile_features(stereo_concat PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
 ament_target_dependencies(
   stereo_concat
-  "rclcpp"
-  "sensor_msgs"
-  "cv_bridge"
-  "std_msgs"
-  "message_filters"
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  std_msgs
+  message_filters
 )
+
+target_link_libraries(stereo_concat ${OpenCV_LIBRARIES})
 
 install(TARGETS 
   stereo_concat
