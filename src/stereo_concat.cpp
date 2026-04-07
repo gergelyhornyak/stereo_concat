@@ -17,6 +17,10 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 
+#include "message_filters/subscriber.h"
+#include "message_filters/time_synchronizer.h"
+#include "message_filters/sync_policies/exact_time.h"
+
 class StereoSubscriber : public rclcpp::Node
 {
 public:
@@ -39,15 +43,45 @@ public:
           msg->format.c_str(), msg->data.size());
     };
 
-    leftSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(left_image_topic, rclcpp::SensorDataQoS(), topic_callback);
-    rightSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(right_image_topic, rclcpp::SensorDataQoS(), topic_callback);
+    //leftSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(left_image_topic, rclcpp::SensorDataQoS(), topic_callback);
+    //rightSubscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(right_image_topic, rclcpp::SensorDataQoS(), topic_callback);
+    left_sub_.subscribe(this, left_image_topic, rclcpp::SensorDataQoS().get_rmw_qos_profile());
+    right_sub_.subscribe(this, right_image_topic, rclcpp::SensorDataQoS().get_rmw_qos_profile());
 
+    sync_ = std::make_shared<message_filters::TimeSynchronizer
+    <sensor_msgs::msg::CompressedImage,
+     sensor_msgs::msg::CompressedImage>>(left_sub_, right_sub_, 10);
+
+    sync_->registerCallback(std::bind(&StereoSubscriber::sync_callback, this, std::placeholders::_1, std::placeholders::_2));
+
+    RCLCPP_INFO(this->get_logger(),
+                "Synchronized subscriber started for: %s and %s",
+                left_image_topic.c_str(), right_image_topic.c_str());
+
+    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>> sub1_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>>(this, left_image_topic);
+    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>> sub2_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CompressedImage>>(this, right_image_topic);
   }
 
 private:
+  void sync_callback(
+      const sensor_msgs::msg::CompressedImage::ConstSharedPtr &left_msg,
+      const sensor_msgs::msg::CompressedImage::ConstSharedPtr &right_msg)
+  {
+    RCLCPP_INFO(this->get_logger(), "Synced Pair Received! Timestamps: %d.%d | %d.%d",
+                left_msg->header.stamp.sec, left_msg->header.stamp.nanosec,
+                right_msg->header.stamp.sec, right_msg->header.stamp.nanosec);
 
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr leftSubscription_;
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr rightSubscription_;
+    // This is where you would do your cv::hconcat or processing
+  }
+  message_filters::Subscriber<sensor_msgs::msg::CompressedImage> left_sub_;
+  message_filters::Subscriber<sensor_msgs::msg::CompressedImage> right_sub_;
+  
+  std::shared_ptr<message_filters::TimeSynchronizer<
+    sensor_msgs::msg::CompressedImage, 
+    sensor_msgs::msg::CompressedImage> > sync_;
+
+  //rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr leftSubscription_;
+  //rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr rightSubscription_;
 };
 
 int main(int argc, char *argv[])
